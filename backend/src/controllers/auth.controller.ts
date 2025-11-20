@@ -1,6 +1,5 @@
 import z from "zod";
 import catchErrors from "../utils/catchErrors";
-import { OK } from "../contants/http";
 
 const registerSchema = z
   .object({
@@ -20,5 +19,5 @@ export const registerHandler = catchErrors(async (req, res) => {
     ...req.body,
     userAgent: req.headers["user-agent"],
   });
-  return res.status(OK).json("Registered");
+  //call service
 });
