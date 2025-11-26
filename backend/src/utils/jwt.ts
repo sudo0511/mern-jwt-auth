@@ -1,0 +1,32 @@
+import jwt, { SignOptions } from "jsonwebtoken";
+import { JWT_REFRESH_SECRET, JWT_SECRET } from "../contants/env";
+import { SessionDocument } from "../models/session.model";
+import { UserDocument } from "../models/user.model";
+
+export type RefreshTokenPayLoad = {
+  sessionId: SessionDocument["_id"];
+};
+export type AccessTokenPayload = RefreshTokenPayLoad & {
+  userId: UserDocument["_id"];
+};
+type OptionsAndSecret = SignOptions & {
+  secret: string;
+};
+const defaults: SignOptions = {
+  audience: ["user"],
+};
+export const accessTokenSignOptions: OptionsAndSecret = {
+  expiresIn: "15m",
+  secret: JWT_SECRET,
+};
+export const refreshTokenSignOptions: OptionsAndSecret = {
+  expiresIn: "30d",
+  secret: JWT_REFRESH_SECRET,
+};
+export const signJwtToken = (
+  payload: RefreshTokenPayLoad | AccessTokenPayload,
+  options?: OptionsAndSecret
+) => {
+  const { secret, ...signOpt } = options || accessTokenSignOptions;
+  return jwt.sign(payload, secret, { ...signOpt, ...defaults });
+};

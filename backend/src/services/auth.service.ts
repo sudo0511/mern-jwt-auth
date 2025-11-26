@@ -1,5 +1,5 @@
 import { JWT_REFRESH_SECRET, JWT_SECRET } from "../contants/env";
-import { CONFLICT } from "../contants/http";
+import { CONFLICT, UNAUTHORIZED } from "../contants/http";
 import VerificationCodeTypes from "../contants/verificationCodeTypes";
 import SessionModel from "../models/session.model";
 import UserModel from "../models/user.model";
@@ -7,6 +7,7 @@ import VerificationCodeModel from "../models/verificationCode.model";
 import appAssert from "../utils/appAssert";
 import { oneYearFromNow } from "../utils/date";
 import jwt from "jsonwebtoken";
+import { refreshTokenSignOptions, signJwtToken } from "../utils/jwt";
 
 export type CreateAccountParams = {
   email: string;
@@ -38,19 +39,52 @@ export const createAccount = async (data: CreateAccountParams) => {
     userAgent: data.userAgent,
   });
   //sign access token and refresh token
-  const refreshToken = jwt.sign(
+  const refreshToken = signJwtToken(
     { sessionId: session._id },
-    JWT_REFRESH_SECRET,
-    { audience: ["user"], expiresIn: "30d" }
+    refreshTokenSignOptions
   );
-  const accessToken = jwt.sign(
-    { userId: user._id, sessionId: session._id },
-    JWT_SECRET,
-    {
-      audience: ["user"],
-      expiresIn: "15m",
-    }
-  );
+
+  const accessToken = signJwtToken({
+    userId: user._id,
+    sessionId: session._id,
+  });
+  //return user and tokens
+  return {
+    user: user.omitPassword(),
+    accessToken,
+    refreshToken,
+  };
+};
+
+type LoginParams = {
+  email: string;
+  password: string;
+  userAgent?: string | undefined;
+};
+
+export const loginUser = async ({
+  email,
+  password,
+  userAgent,
+}: LoginParams) => {
+  //get user by email and verify if they exists
+  const user = await UserModel.findOne({ email: email });
+  appAssert(user, UNAUTHORIZED, "Invalid email or password");
+  //validate password
+  const validPwd = await user.comparePassword(password);
+  appAssert(validPwd, UNAUTHORIZED, "Invalid email or password");
+  //create session
+  const userId = user._id;
+  const session = await SessionModel.create({
+    userId,
+    userAgent,
+  });
+  const sessionInfo = {
+    sessionId: session._id,
+  };
+  //sign access and refresh tokens
+  const refreshToken = signJwtToken(sessionInfo, refreshTokenSignOptions);
+  const accessToken = signJwtToken({ userId, ...sessionInfo });
   //return user and tokens
   return {
     user: user.omitPassword(),
