@@ -5,9 +5,14 @@ import SessionModel from "../models/session.model";
 import UserModel from "../models/user.model";
 import VerificationCodeModel from "../models/verificationCode.model";
 import appAssert from "../utils/appAssert";
-import { oneYearFromNow } from "../utils/date";
+import { ONE_DAY_MS, oneYearFromNow, thirtyDaysFromNow } from "../utils/date";
 import jwt from "jsonwebtoken";
-import { refreshTokenSignOptions, signJwtToken } from "../utils/jwt";
+import {
+  RefreshTokenPayLoad,
+  refreshTokenSignOptions,
+  signJwtToken,
+  verifyToken,
+} from "../utils/jwt";
 
 export type CreateAccountParams = {
   email: string;
@@ -90,5 +95,40 @@ export const loginUser = async ({
     user: user.omitPassword(),
     accessToken,
     refreshToken,
+  };
+};
+
+export const refreshUserAccessToken = async (refreshToken: string) => {
+  const { payload } = verifyToken<RefreshTokenPayLoad>(refreshToken, {
+    secret: refreshTokenSignOptions.secret,
+  });
+  appAssert(payload, UNAUTHORIZED, "Invalid refresh token");
+
+  const session = await SessionModel.findById(payload.sessionId);
+  const now = Date.now();
+  appAssert(
+    session && session.expiresAt.getTime() > now,
+    UNAUTHORIZED,
+    "Session expired"
+  );
+  //refresh session if it expires in next 24 hrts
+  const sessionNeedsRefresh = session.expiresAt.getTime() - now <= ONE_DAY_MS;
+  if (sessionNeedsRefresh) {
+    session.expiresAt = thirtyDaysFromNow();
+    await session.save();
+  }
+  //if session was refreshed and we increase expire time, we need to generate and send user
+  //new refresh token since old refresh token still have same expiry
+  const newRefreshToken = sessionNeedsRefresh
+    ? signJwtToken({ sessionId: session._id }, refreshTokenSignOptions)
+    : undefined;
+  const accessToken = signJwtToken({
+    userId: session.userId,
+    sessionId: session._id,
+  });
+
+  return {
+    accessToken,
+    newRefreshToken,
   };
 };

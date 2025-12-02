@@ -8,12 +8,11 @@ const defaults: CookieOptions = {
   httpOnly: true,
   secure,
 };
-
-const getAccessTokenCookieOptions = (): CookieOptions => ({
+export const getAccessTokenCookieOptions = (): CookieOptions => ({
   ...defaults,
   expires: fifteenMinsFromNow(),
 });
-const getRefreshTokenCookieOptions = (): CookieOptions => ({
+export const getRefreshTokenCookieOptions = (): CookieOptions => ({
   ...defaults,
   expires: thirtyDaysFromNow(),
   path: "/auth/refresh", //better security -> as refresh only needs to be sent on this particular path
@@ -35,3 +34,8 @@ export const setAuthCookies = ({
     .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
     .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
 };
+
+export const clearAuthCookies = (res: Response) =>
+  res
+    .clearCookie("accessToken")
+    .clearCookie("refreshToken", { path: "/auth/refresh" });
