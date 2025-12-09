@@ -1,5 +1,10 @@
 import { JWT_REFRESH_SECRET, JWT_SECRET } from "../contants/env";
-import { CONFLICT, UNAUTHORIZED } from "../contants/http";
+import {
+  CONFLICT,
+  INTERNAL_SERVER_ERROR,
+  NOT_FOUND,
+  UNAUTHORIZED,
+} from "../contants/http";
 import VerificationCodeTypes from "../contants/verificationCodeTypes";
 import SessionModel from "../models/session.model";
 import UserModel from "../models/user.model";
@@ -130,5 +135,32 @@ export const refreshUserAccessToken = async (refreshToken: string) => {
   return {
     accessToken,
     newRefreshToken,
+  };
+};
+
+export const verifyEmail = async (code: string) => {
+  //get the verification code
+  const verificationCode = await VerificationCodeModel.findOne({
+    _id: code,
+    type: VerificationCodeTypes.EmailVerification,
+    expiresAt: { $gt: new Date() },
+  });
+  appAssert(
+    verificationCode,
+    NOT_FOUND,
+    "Invalid or expired verification code"
+  );
+  //get user and update user by id
+  const userUpdated = await UserModel.findByIdAndUpdate(
+    verificationCode.userId,
+    {
+      verified: true,
+    },
+    { new: true }
+  );
+  appAssert(userUpdated, INTERNAL_SERVER_ERROR, "Failed to verify email");
+  await verificationCode.deleteOne();
+  return {
+    user: userUpdated.omitPassword(),
   };
 };
